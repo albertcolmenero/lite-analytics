@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Website {
+  id        String   @id @default(uuid())
+  domain    String   @unique
+  ownerId   String
+  createdAt DateTime @default(now())
+  
+  events    Event[]
+
+  @@map("websites")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  websiteId   String
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  
+  // Core
+  type        EventType
+  visitorHash String
+  createdAt   DateTime @default(now())
+
+  // Page Data
+  pathname    String
+  hostname    String?
+  referrer    String?
+  
+  // User Data
+  browser     String?
+  os          String?
+  device      String?
+  country     String?
+  
+  // Marketing (UTM)
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+
+  // Custom Events
+  eventName   String?
+  properties  Json?   // Limit to 8 keys in application logic
+
+  @@index([websiteId, createdAt])
+  @@index([websiteId, pathname])
+  @@map("events")
+}
+
+enum EventType {
+  pageview
+  custom
+}
