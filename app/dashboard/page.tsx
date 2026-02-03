@@ -1,7 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { Website } from "@prisma/client";
 import { getAnalytics, getUserWebsites } from "@/lib/analytics";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { OverviewChart } from "@/components/analytics/overview-chart";
@@ -38,7 +37,7 @@ export default async function DashboardPage(props: { searchParams: Promise<{ web
     }
 
     const selectedWebsiteId = searchParams.websiteId || websites[0].id;
-    const selectedWebsite = websites.find((w: Website) => w.id === selectedWebsiteId) || websites[0];
+    const selectedWebsite = websites.find(w => w.id === selectedWebsiteId) || websites[0];
 
     // Date Range (default 30 days)
     const to = new Date();
