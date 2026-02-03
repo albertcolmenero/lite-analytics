@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getAnalytics, getUserWebsites } from "@/lib/analytics";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +10,6 @@ import { WebsiteSelector } from "@/components/analytics/website-selector";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { subDays } from "date-fns";
-import { env } from "@/lib/env";
 
 export default async function DashboardPage(props: { searchParams: Promise<{ websiteId?: string, timeframe?: string }> }) {
     const searchParams = await props.searchParams;
@@ -45,7 +45,12 @@ export default async function DashboardPage(props: { searchParams: Promise<{ web
 
     const analytics = await getAnalytics(selectedWebsite.id, { from, to });
     const hasData = analytics.overview.totalPageviews > 0;
-    const scriptTag = `<script defer src="${env.NEXT_PUBLIC_APP_URL}/tracker.js" data-website-id="${selectedWebsite.id}"></script>`;
+    const headersList = await headers();
+    const host = headersList.get("host");
+    const protocol = headersList.get("x-forwarded-proto") || "http";
+    const baseUrl = `${protocol}://${host}`;
+
+    const scriptTag = `<script defer src="${baseUrl}/tracker.js" data-website-id="${selectedWebsite.id}"></script>`;
 
     return (
         <div className="p-8 space-y-8">
@@ -78,7 +83,7 @@ export default async function DashboardPage(props: { searchParams: Promise<{ web
                                 <Link href={`/dashboard/setup?websiteId=${selectedWebsite.id}`}>View Full Instructions</Link>
                             </Button>
                             <Button variant="ghost" size="sm" asChild>
-                                <Link href={process.env.NEXT_PUBLIC_APP_URL + "/tracker.js"} target="_blank">View Script</Link>
+                                <Link href={baseUrl + "/tracker.js"} target="_blank">View Script</Link>
                             </Button>
                         </div>
                     </CardContent>
