@@ -3,8 +3,10 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 const isPublicRoute = createRouteMatcher([
     '/sign-in(.*)',
     '/sign-up(.*)',
-    '/api/send(.*)', // Tracker endpoint must be public
-    '/tracker.js'    // Tracker script must be public (though it is static)
+    '/api/send(.*)',      // Tracker endpoint must be public
+    '/api/test-seed(.*)', // Test endpoint for development
+    '/tracker.js',        // Tracker script must be public (though it is static)
+    '/test-site(.*)'      // Test site pages
 ])
 
 export default clerkMiddleware(async (auth, request) => {

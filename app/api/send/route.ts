@@ -28,6 +28,23 @@ function getVisitorHash(ip: string, userAgent: string, websiteId: string) {
     return crypto.createHash("sha256").update(input).digest("hex");
 }
 
+// Normalize domain by stripping www. prefix
+function normalizeDomain(hostname: string): string {
+    return hostname.replace(/^www\./, '');
+}
+
+// CORS headers for cross-origin tracking
+const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+};
+
+// Handle preflight OPTIONS requests
+export async function OPTIONS() {
+    return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(req: NextRequest) {
     try {
         // 1. Validate Body
@@ -37,24 +54,26 @@ export async function POST(req: NextRequest) {
         // 2. Validate Origin / Website
         const origin = req.headers.get("origin") || req.headers.get("referer");
         if (!origin) {
-            return NextResponse.json({ error: "Missing Origin" }, { status: 400 });
+            return NextResponse.json({ error: "Missing Origin" }, { status: 400, headers: corsHeaders });
         }
 
         let domain: string;
         try {
             const originUrl = new URL(origin);
-            domain = originUrl.hostname;
+            // Normalize domain by stripping www. prefix for matching
+            domain = normalizeDomain(originUrl.hostname);
         } catch {
-            return NextResponse.json({ error: "Invalid Origin" }, { status: 400 });
+            return NextResponse.json({ error: "Invalid Origin" }, { status: 400, headers: corsHeaders });
         }
 
-        // Find website by domain
+        // Find website by domain (normalized)
         const website = await prisma.website.findUnique({
             where: { domain },
         });
 
         if (!website) {
-            return NextResponse.json({ error: "Website not registered" }, { status: 404 });
+            console.log(`Website not found for domain: ${domain}`);
+            return NextResponse.json({ error: "Website not registered", domain }, { status: 404, headers: corsHeaders });
         }
 
         // 3. Compute Metadata
@@ -100,10 +119,10 @@ export async function POST(req: NextRequest) {
             },
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true }, { headers: corsHeaders });
 
     } catch (error) {
         console.error("Analytics Error:", error);
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500, headers: corsHeaders });
     }
 }

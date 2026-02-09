@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Site - Lite Analytics Demo</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: var(--bg-card);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .hero {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--text), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 4rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            padding: 2rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .card p {
+            color: var(--text-muted);
+        }
+
+        .cta-section {
+            text-align: center;
+            padding: 3rem;
+            background: var(--bg-card);
+            border-radius: 1rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .cta-section h2 {
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), #a855f7);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        footer {
+            background: var(--bg-card);
+            padding: 2rem;
+            text-align: center;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Status Panel */
+        .status-panel {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: var(--bg-card);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 0.75rem;
+            padding: 1rem 1.5rem;
+            font-size: 0.875rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            max-width: 350px;
+        }
+
+        .status-panel h4 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .status-panel .log {
+            color: var(--text-muted);
+            font-family: monospace;
+            font-size: 0.8rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .status-panel .log div {
+            margin-bottom: 0.25rem;
+        }
+
+        .status-success { color: #22c55e; }
+        .status-error { color: #ef4444; }
+        .status-info { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="logo">TestSite</div>
+            <ul class="nav-links">
+                <li><a href="#" onclick="navigateTo('/')">Home</a></li>
+                <li><a href="#" onclick="navigateTo('/about')">About</a></li>
+                <li><a href="#" onclick="navigateTo('/pricing')">Pricing</a></li>
+                <li><a href="#" onclick="navigateTo('/contact')">Contact</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Welcome to Test Site</h1>
+            <p>This is a demo page to test your Lite Analytics tracking script. Click around and watch the events appear in your dashboard!</p>
+        </section>
+
+        <div class="cards">
+            <div class="card">
+                <h3>🚀 Fast & Lightweight</h3>
+                <p>Our analytics script is tiny and won't slow down your site.</p>
+            </div>
+            <div class="card">
+                <h3>🔒 Privacy Focused</h3>
+                <p>No cookies, no personal data. Just the metrics you need.</p>
+            </div>
+            <div class="card">
+                <h3>📊 Real-time Data</h3>
+                <p>See your analytics update in real-time as visitors browse.</p>
+            </div>
+        </div>
+
+        <div class="cta-section">
+            <h2>Test Custom Events</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">Click the button below to send a custom event</p>
+            <button class="btn" onclick="sendCustomEvent()">Send Custom Event</button>
+        </div>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Test Site. Built to test Lite Analytics.</p>
+    </footer>
+
+    <!-- Status Panel to show tracking activity -->
+    <div class="status-panel">
+        <h4>📡 Analytics Status</h4>
+        <div class="log" id="statusLog">
+            <div class="status-info">Waiting for tracker to load...</div>
+        </div>
+    </div>
+
+    <!-- 
+        IMPORTANT: The tracker script below points to localhost:3000 
+        Make sure your dev server is running on this port.
+        Replace the data-website-id with your actual website ID from the dashboard.
+    -->
+    <script>
+        // Status logging helper
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('statusLog');
+            const div = document.createElement('div');
+            div.className = 'status-' + type;
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            logEl.appendChild(div);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // Intercept fetch to log analytics calls
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            if (args[0] && args[0].includes && args[0].includes('/api/send')) {
+                log('Sending event via fetch...', 'info');
+                return originalFetch.apply(this, args)
+                    .then(response => {
+                        if (response.ok) {
+                            log('Event sent successfully!', 'success');
+                        } else {
+                            log('Event failed: ' + response.status, 'error');
+                        }
+                        return response;
+                    })
+                    .catch(err => {
+                        log('Event error: ' + err.message, 'error');
+                        throw err;
+                    });
+            }
+            return originalFetch.apply(this, args);
+        };
+
+        // Intercept sendBeacon
+        const originalSendBeacon = navigator.sendBeacon;
+        navigator.sendBeacon = function(url, data) {
+            if (url.includes('/api/send')) {
+                log('Sending event via beacon...', 'info');
+                const result = originalSendBeacon.apply(navigator, arguments);
+                log(result ? 'Beacon queued!' : 'Beacon failed', result ? 'success' : 'error');
+                return result;
+            }
+            return originalSendBeacon.apply(navigator, arguments);
+        };
+
+        // SPA-style navigation simulation
+        function navigateTo(path) {
+            history.pushState({}, '', path);
+            log('Navigated to: ' + path, 'info');
+        }
+
+        // Custom event
+        function sendCustomEvent() {
+            if (window.liteAnalytics) {
+                window.liteAnalytics.track('button_click', { button: 'cta_button' });
+                log('Custom event triggered: button_click', 'info');
+            } else {
+                log('liteAnalytics not loaded!', 'error');
+            }
+        }
+
+        // Check if tracker loaded
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (window.liteAnalytics) {
+                    log('Tracker loaded successfully!', 'success');
+                } else {
+                    log('Tracker not found - check script tag', 'error');
+                }
+            }, 500);
+        });
+    </script>
+
+    <!-- Lite Analytics Tracking Script -->
+    <script defer src="/tracker.js" data-host="http://localhost:3000"></script>
+</body>
+</html>
