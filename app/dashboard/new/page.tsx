@@ -13,15 +13,26 @@ async function createWebsiteAction(formData: FormData) {
     const { userId } = await auth();
     if (!userId) throw new Error("Unauthorized");
 
-    const domain = formData.get("domain") as string;
+    const rawDomain = (formData.get("domain") as string || "").trim();
 
-    // Simple validation
+    if (!rawDomain) return;
+
+    // Normalize: strip protocol, www prefix, trailing slash, lowercase
+    let domain = rawDomain.toLowerCase();
+    try {
+        if (domain.includes("://") || domain.includes("/")) {
+            const url = new URL(domain.includes("://") ? domain : `https://${domain}`);
+            domain = url.hostname;
+        }
+    } catch { /* use as-is if URL parsing fails */ }
+    domain = domain.replace(/^www\./, "").replace(/\/$/, "");
+
     if (!domain) return;
 
     const newSite = await prisma.website.create({
         data: {
             ownerId: userId,
-            domain: domain
+            domain: domain,
         }
     });
 

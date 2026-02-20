@@ -131,11 +131,20 @@ export async function getUserWebsites(userId: string) {
     });
 }
 
-export async function createWebsite(userId: string, domain: string) {
+export async function createWebsite(userId: string, rawDomain: string) {
+    let domain = rawDomain.trim().toLowerCase();
+    try {
+        if (domain.includes("://") || domain.includes("/")) {
+            const url = new URL(domain.includes("://") ? domain : `https://${domain}`);
+            domain = url.hostname;
+        }
+    } catch { /* use as-is */ }
+    domain = domain.replace(/^www\./, "").replace(/\/$/, "");
+
     return await prisma.website.create({
         data: {
             ownerId: userId,
-            domain: domain,
+            domain,
         }
     })
 }
