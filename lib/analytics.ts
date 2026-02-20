@@ -1,15 +1,110 @@
 import { prisma } from "@/lib/db";
-import { startOfDay, subDays, endOfDay, format } from "date-fns";
+import { addDays, subDays, startOfDay, format } from "date-fns";
 
 export type DateRange = {
     from: Date;
     to: Date;
 };
 
+function fillChartDays(
+    rawData: { date: string; views: number; visitors: number }[],
+    from: Date,
+    to: Date
+): { date: string; views: number; visitors: number }[] {
+    const dataMap = new Map(rawData.map(d => [d.date, d]));
+    const result: { date: string; views: number; visitors: number }[] = [];
+
+    let current = startOfDay(from);
+    const end = startOfDay(to);
+
+    while (current <= end) {
+        const dateStr = format(current, "yyyy-MM-dd");
+        result.push(dataMap.get(dateStr) || { date: dateStr, views: 0, visitors: 0 });
+        current = addDays(current, 1);
+    }
+
+    return result;
+}
+
+export async function getWebsitesSummary(userId: string) {
+    const websites = await getUserWebsites(userId);
+    if (websites.length === 0) return [];
+
+    const now = new Date();
+    const sevenDaysAgo = subDays(now, 7);
+    const fourteenDaysAgo = subDays(now, 14);
+
+    const websiteIds = websites.map(w => w.id);
+
+    type SummaryRow = { websiteId: string; currentViews: number; previousViews: number; currentVisitors: number };
+
+    const summaryRows = await prisma.$queryRaw<SummaryRow[]>`
+        SELECT
+            e."websiteId",
+            COALESCE(SUM(CASE WHEN e."createdAt" >= ${sevenDaysAgo} THEN 1 ELSE 0 END), 0)::int AS "currentViews",
+            COALESCE(SUM(CASE WHEN e."createdAt" < ${sevenDaysAgo} THEN 1 ELSE 0 END), 0)::int AS "previousViews",
+            COALESCE(COUNT(DISTINCT CASE WHEN e."createdAt" >= ${sevenDaysAgo} THEN e."visitorHash" END), 0)::int AS "currentVisitors"
+        FROM "events" e
+        WHERE e."websiteId" = ANY(${websiteIds})
+          AND e."createdAt" >= ${fourteenDaysAgo}
+          AND e."type" = 'pageview'
+        GROUP BY e."websiteId"
+    `;
+
+    type ChartRow = { websiteId: string; date: string; views: number };
+
+    const chartRows = await prisma.$queryRaw<ChartRow[]>`
+        SELECT
+            e."websiteId",
+            to_char(e."createdAt", 'YYYY-MM-DD') AS date,
+            COUNT(*)::int AS views
+        FROM "events" e
+        WHERE e."websiteId" = ANY(${websiteIds})
+          AND e."createdAt" >= ${sevenDaysAgo}
+          AND e."type" = 'pageview'
+        GROUP BY e."websiteId", to_char(e."createdAt", 'YYYY-MM-DD')
+    `;
+
+    const summaryMap = new Map(summaryRows.map(r => [r.websiteId, r]));
+    const chartMap = new Map<string, { date: string; views: number }[]>();
+    for (const row of chartRows) {
+        if (!chartMap.has(row.websiteId)) chartMap.set(row.websiteId, []);
+        chartMap.get(row.websiteId)!.push({ date: row.date, views: row.views });
+    }
+
+    return websites.map(website => {
+        const summary = summaryMap.get(website.id);
+        const currentViews = summary?.currentViews ?? 0;
+        const previousViews = summary?.previousViews ?? 0;
+        const currentVisitors = summary?.currentVisitors ?? 0;
+
+        const delta = previousViews > 0
+            ? ((currentViews - previousViews) / previousViews) * 100
+            : (currentViews > 0 ? 100 : 0);
+
+        const rawChart = chartMap.get(website.id) || [];
+        const chartData = fillChartDays(
+            rawChart.map(r => ({ ...r, visitors: 0 })),
+            sevenDaysAgo,
+            now,
+        );
+
+        return {
+            id: website.id,
+            domain: website.domain,
+            createdAt: website.createdAt,
+            currentViews,
+            currentVisitors,
+            previousViews,
+            delta,
+            chartData,
+        };
+    });
+}
+
 export async function getAnalytics(websiteId: string, range: DateRange) {
     const { from, to } = range;
 
-    // 1. Visitors & PageViews (Aggregate)
     const totalPageviews = await prisma.event.count({
         where: {
             websiteId,
@@ -18,9 +113,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         },
     });
 
-    // Unique Visitors (Approximate by counting distinct visitorHash)
-    // Prisma doesn't support count(distinct) well on all providers easily without groupBy
-    // but we can use groupBy
     const uniqueVisitorsFn = await prisma.event.groupBy({
         by: ["visitorHash"],
         where: {
@@ -31,31 +123,22 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
     });
     const totalVisitors = uniqueVisitorsFn.length;
 
-    // 2. Chart Data (Time series)
-    // Group by day.
-    // We can query raw and aggregate in JS or use raw SQL.
-    // For "Lite" and simple implementation, let's fetch minimal fields and aggregate in JS 
-    // OR use prisma groupBy createdAt. 
-    // Prisma groupBy date truncation is tricky without raw query.
-    // Let's us Raw Query for efficiency if using Postgres.
-    // "SELECT date_trunc('day', createdAt) as date, count(*) as views, count(distinct visitorHash) as visitors FROM ..."
+    const chartDataRaw = await prisma.$queryRaw<{ date: string; views: number; visitors: number }[]>`
+        SELECT
+            to_char("createdAt", 'YYYY-MM-DD') as date,
+            COUNT(*)::int as views,
+            COUNT(DISTINCT "visitorHash")::int as visitors
+        FROM "events"
+        WHERE "websiteId" = ${websiteId}
+          AND "createdAt" >= ${from}
+          AND "createdAt" <= ${to}
+          AND "type" = 'pageview'
+        GROUP BY 1
+        ORDER BY 1 ASC
+    `;
 
-    // Since we are using Prisma + Neon (Postgres), we can use queryRaw.
-    const chartDataRaw = await prisma.$queryRaw`
-    SELECT 
-      to_char("createdAt", 'YYYY-MM-DD') as date,
-      COUNT(*)::int as views,
-      COUNT(DISTINCT "visitorHash")::int as visitors
-    FROM "events"
-    WHERE "websiteId" = ${websiteId}
-      AND "createdAt" >= ${from}
-      AND "createdAt" <= ${to}
-      AND "type" = 'pageview'
-    GROUP BY 1
-    ORDER BY 1 ASC
-  `;
+    const chartData = fillChartDays(chartDataRaw, from, to);
 
-    // 3. Top Pages
     const topPages = await prisma.event.groupBy({
         by: ["pathname"],
         where: { websiteId, type: "pageview", createdAt: { gte: from, lte: to } },
@@ -64,7 +147,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         take: 10,
     });
 
-    // 4. Top Referrers
     const topReferrers = await prisma.event.groupBy({
         by: ["referrer"],
         where: { websiteId, type: "pageview", createdAt: { gte: from, lte: to }, referrer: { not: null } },
@@ -73,7 +155,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         take: 10,
     });
 
-    // 5. Countries
     const topCountries = await prisma.event.groupBy({
         by: ["country"],
         where: { websiteId, createdAt: { gte: from, lte: to }, country: { not: null } },
@@ -82,7 +163,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         take: 10,
     });
 
-    // 6. Devices
     const topDevices = await prisma.event.groupBy({
         by: ["device"],
         where: { websiteId, createdAt: { gte: from, lte: to }, device: { not: null } },
@@ -91,7 +171,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         take: 5,
     });
 
-    // 7. Browsers
     const topBrowsers = await prisma.event.groupBy({
         by: ["browser"],
         where: { websiteId, createdAt: { gte: from, lte: to }, browser: { not: null } },
@@ -100,7 +179,6 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
         take: 5,
     });
 
-    // 8. OS
     const topOS = await prisma.event.groupBy({
         by: ["os"],
         where: { websiteId, createdAt: { gte: from, lte: to }, os: { not: null } },
@@ -114,7 +192,7 @@ export async function getAnalytics(websiteId: string, range: DateRange) {
             totalPageviews,
             totalVisitors,
         },
-        chartData: chartDataRaw as { date: string, views: number, visitors: number }[],
+        chartData,
         topPages: topPages.map(p => ({ name: p.pathname, count: p._count.pathname })),
         topReferrers: topReferrers.map(r => ({ name: r.referrer || "Direct", count: r._count.referrer })),
         topCountries: topCountries.map(c => ({ name: c.country || "Unknown", count: c._count.country })),

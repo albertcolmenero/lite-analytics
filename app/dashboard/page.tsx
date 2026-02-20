@@ -1,149 +1,106 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { prisma } from "@/lib/db";
-import { getAnalytics, getUserWebsites } from "@/lib/analytics";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { OverviewChart } from "@/components/analytics/overview-chart";
-import { DataList } from "@/components/analytics/data-list";
-import { WebsiteSelector } from "@/components/analytics/website-selector";
+import { getWebsitesSummary } from "@/lib/analytics";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MiniChart } from "@/components/analytics/mini-chart";
 import Link from "next/link";
-import { subDays } from "date-fns";
+import { Plus, Globe, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
-export default async function DashboardPage(props: { searchParams: Promise<{ websiteId?: string, timeframe?: string }> }) {
-    const searchParams = await props.searchParams;
+function DeltaBadge({ delta }: { delta: number }) {
+    if (delta === 0) {
+        return (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                <Minus className="size-3" /> 0%
+            </span>
+        );
+    }
+    const positive = delta > 0;
+    return (
+        <span className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${positive ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-red-500/10 text-red-600 dark:text-red-400"}`}>
+            {positive ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+            {positive ? "+" : ""}{delta.toFixed(1)}%
+        </span>
+    );
+}
+
+export default async function DashboardPage() {
     const { userId } = await auth();
     if (!userId) redirect("/sign-in");
 
-    const websites = await getUserWebsites(userId);
+    const websites = await getWebsitesSummary(userId);
 
-    if (websites.length === 0) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-screen">
-                <Card className="w-[400px]">
-                    <CardHeader>
-                        <CardTitle>Welcome to Lite Analytics</CardTitle>
-                        <CardDescription>Get started by adding your first website.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Button asChild className="w-full">
-                            <Link href="/dashboard/new">Add Website</Link>
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">Your Websites</h1>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        {websites.length === 0
+                            ? "Get started by adding your first website"
+                            : `Monitoring ${websites.length} website${websites.length !== 1 ? "s" : ""}`}
+                    </p>
+                </div>
+                <Button asChild>
+                    <Link href="/dashboard/new">
+                        <Plus className="size-4" />
+                        Add Website
+                    </Link>
+                </Button>
+            </div>
+
+            {websites.length === 0 ? (
+                <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="mb-4 rounded-full bg-muted p-4">
+                            <Globe className="size-8 text-muted-foreground" />
+                        </div>
+                        <h3 className="mb-1 text-lg font-semibold">No websites yet</h3>
+                        <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+                            Add your first website to start tracking page views, visitors, and more.
+                        </p>
+                        <Button asChild>
+                            <Link href="/dashboard/new">
+                                <Plus className="size-4" />
+                                Add Your First Website
+                            </Link>
                         </Button>
                     </CardContent>
                 </Card>
-            </div>
-        );
-    }
-
-    const selectedWebsiteId = searchParams.websiteId || websites[0].id;
-    const selectedWebsite = websites.find(w => w.id === selectedWebsiteId) || websites[0];
-
-    // Date Range (default 30 days)
-    const to = new Date();
-    const from = subDays(to, 30);
-
-    const analytics = await getAnalytics(selectedWebsite.id, { from, to });
-    const hasData = analytics.overview.totalPageviews > 0;
-    const headersList = await headers();
-    const host = headersList.get("host");
-    const protocol = headersList.get("x-forwarded-proto") || "http";
-    const baseUrl = `${protocol}://${host}`;
-
-    const scriptTag = `<script defer src="${baseUrl}/tracker.js" data-website-id="${selectedWebsite.id}"></script>`;
-
-    return (
-        <div className="p-8 space-y-8">
-            <div className="flex justify-between items-center">
-                <div className="space-y-1">
-                    <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                    <p className="text-muted-foreground hidden md:block">Analytics for {selectedWebsite.domain}</p>
-                </div>
-                <div className="flex gap-4">
-                    <WebsiteSelector websites={websites} selectedId={selectedWebsite.id} />
-                    <Button asChild variant="outline">
-                        <Link href={`/dashboard/setup?websiteId=${selectedWebsite.id}`}>Setup Instructions</Link>
-                    </Button>
-                </div>
-            </div>
-
-            {!hasData ? (
-                <Card className="border-dashed border-2 bg-slate-50 dark:bg-slate-900/50">
-                    <CardHeader>
-                        <CardTitle>Waiting for Data</CardTitle>
-                        <CardDescription>We haven't received any events for <strong>{selectedWebsite.domain}</strong> yet.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <p className="text-sm text-muted-foreground">To start tracking, add this script to your website's <code>&lt;head&gt;</code> or <code>&lt;body&gt;</code>:</p>
-                        <div className="bg-slate-950 p-4 rounded-md overflow-x-auto relative group">
-                            <code className="text-sm text-white whitespace-pre-wrap">{scriptTag}</code>
-                        </div>
-                        <div className="flex gap-2">
-                            <Button asChild size="sm">
-                                <Link href={`/dashboard/setup?websiteId=${selectedWebsite.id}`}>View Full Instructions</Link>
-                            </Button>
-                            <Button variant="ghost" size="sm" asChild>
-                                <Link href={baseUrl + "/tracker.js"} target="_blank">View Script</Link>
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
             ) : (
-                <>
-                    {/* Overview Cards */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Visitors</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{analytics.overview.totalVisitors}</div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Page Views</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{analytics.overview.totalPageviews}</div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Views / Visitor</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {analytics.overview.totalVisitors > 0
-                                        ? (analytics.overview.totalPageviews / analytics.overview.totalVisitors).toFixed(1)
-                                        : 0}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {websites.map((site) => (
+                        <Link key={site.id} href={`/dashboard/${site.id}`} className="group">
+                            <Card className="transition-all duration-200 group-hover:border-primary/30 group-hover:shadow-md">
+                                <CardContent className="pt-6">
+                                    <div className="mb-4 flex items-start justify-between">
+                                        <div className="min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                                                    <Globe className="size-4 text-primary" />
+                                                </div>
+                                                <h3 className="truncate font-semibold" title={site.domain}>
+                                                    {site.domain}
+                                                </h3>
+                                            </div>
+                                        </div>
+                                        <DeltaBadge delta={site.delta} />
+                                    </div>
 
-                    {/* Chart */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Traffic Overview</CardTitle>
-                        </CardHeader>
-                        <CardContent className="pl-2">
-                            <OverviewChart data={analytics.chartData} />
-                        </CardContent>
-                    </Card>
+                                    <div className="mb-4">
+                                        <p className="text-3xl font-bold tabular-nums">{site.currentViews.toLocaleString()}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            visits last 7 days &middot; {site.currentVisitors.toLocaleString()} unique
+                                        </p>
+                                    </div>
 
-                    {/* Breakdowns */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        <DataList title="Top Pages" data={analytics.topPages} />
-                        <DataList title="Top Referrers" data={analytics.topReferrers} />
-                        <DataList title="Devices" data={analytics.topDevices} />
-                        <DataList title="Browsers" data={analytics.topBrowsers} />
-                        <DataList title="OS" data={analytics.topOS} />
-                        <DataList title="Countries" data={analytics.topCountries} />
-                    </div>
-                </>
+                                    <MiniChart data={site.chartData} />
+                                </CardContent>
+                            </Card>
+                        </Link>
+                    ))}
+                </div>
             )}
-
         </div>
     );
 }

@@ -1,46 +1,82 @@
 "use client"
 
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { format, parseISO } from "date-fns"
 
-export function OverviewChart({ data }: { data: { date: string, views: number, visitors: number }[] }) {
+function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
+    if (!active || !payload?.length || !label) return null;
     return (
-        <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        <div className="rounded-lg border bg-card px-3 py-2 shadow-lg">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">
+                {format(parseISO(label), "MMM d, yyyy")}
+            </p>
+            {payload.map((entry) => (
+                <div key={entry.name} className="flex items-center gap-2 text-sm">
+                    <span className="size-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span className="text-muted-foreground">{entry.name}</span>
+                    <span className="ml-auto font-semibold tabular-nums">{entry.value.toLocaleString()}</span>
+                </div>
+            ))}
+        </div>
+    )
+}
+
+export function OverviewChart({ data }: { data: { date: string; views: number; visitors: number }[] }) {
+    return (
+        <ResponsiveContainer width="100%" height={360}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                    <linearGradient id="fillViews" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="fillVisitors" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" strokeOpacity={0.5} />
                 <XAxis
                     dataKey="date"
-                    stroke="#888888"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
+                    tick={{ fill: "var(--color-muted-foreground)" }}
+                    tickFormatter={(value) => {
+                        try { return format(parseISO(value), "MMM d"); } catch { return value; }
+                    }}
+                    interval="preserveStartEnd"
+                    minTickGap={40}
                 />
                 <YAxis
-                    stroke="#888888"
                     fontSize={12}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(value) => `${value}`}
+                    tick={{ fill: "var(--color-muted-foreground)" }}
+                    tickFormatter={(v) => (v === 0 ? "0" : v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`)}
+                    width={40}
+                    allowDecimals={false}
                 />
-                <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}
-                    labelStyle={{ color: 'var(--foreground)' }}
-                />
-                <Line
-                    type="monotone"
-                    dataKey="visitors"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    activeDot={{ r: 8 }}
-                    name="Unique Visitors"
-                />
-                <Line
+                <Tooltip content={<CustomTooltip />} />
+                <Area
                     type="monotone"
                     dataKey="views"
-                    stroke="#16a34a"
+                    stroke="#10b981"
+                    fill="url(#fillViews)"
                     strokeWidth={2}
+                    dot={false}
                     name="Page Views"
                 />
-            </LineChart>
+                <Area
+                    type="monotone"
+                    dataKey="visitors"
+                    stroke="#3b82f6"
+                    fill="url(#fillVisitors)"
+                    strokeWidth={2}
+                    dot={false}
+                    name="Visitors"
+                />
+            </AreaChart>
         </ResponsiveContainer>
     )
 }
